@@ -1,0 +1,167 @@
+name: Import exact V9 full visualization source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  import-source:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Reconstruct and verify exact V9 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/source /tmp/archive.tar.gz /tmp/manifest.txt
+          mkdir -p /tmp/source
+          curl -L --fail --retry 3 \
+            "https://github.com/lord-navy-crypto/radia-magnet-studio/archive/b440e31a1291909a87d2d62363af1aeb7640c705.tar.gz" \
+            -o /tmp/archive.tar.gz
+          tar -xzf /tmp/archive.tar.gz -C /tmp/source --strip-components=1
+
+          python - <<'PY2'
+          from pathlib import Path
+          import base64, gzip, hashlib
+          src=Path('/tmp/source')
+          jobs=[
+              ([src/'.upload/reporting_full_results.py.gz.b64'], src/'reporting/full_results.py', '6ccfeb7e7f61da00ad5b5c7fc6acb8e4b23a082d518ee9292ac284a7b3141858'),
+              ([src/'.upload/undulator_v11_radia_gui_v9.py.gz.b64'], src/'undulator_v11_radia_gui_v9.py', 'e30183cc4b402676142f714ac3f9ae86e89fd23b366e46af1376a38cd1ca5fdb'),
+              ([src/f'.upload/integrated.part{i:02d}' for i in range(1,6)], src/'undulator_v11_radia_integrated_v9.py', 'bafe77b8df453963e2ea0798f79e6d00375d00496b4ebf5f34fb740b1576c987'),
+          ]
+          for pieces,dest,expected in jobs:
+              encoded=''.join(p.read_text(encoding='utf-8') for p in pieces)
+              data=gzip.decompress(base64.b64decode(encoded))
+              got=hashlib.sha256(data).hexdigest()
+              if got != expected:
+                  raise SystemExit(f'SHA mismatch for {dest}: {got} != {expected}')
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              dest.write_bytes(data)
+              print(f'RECONSTRUCTED {dest.relative_to(src)} {got}')
+          PY2
+
+          cat > /tmp/manifest.txt <<'MANIFEST'
+          b18473a10918b70b12edc629fe4d7d2ccbf05d8f5096ca5ab231b0e7f9651786  README.md
+          e30183cc4b402676142f714ac3f9ae86e89fd23b366e46af1376a38cd1ca5fdb  undulator_v11_radia_gui_v9.py
+          48b9655b1be9562461fbb3819c6a042f18c6462aafce2f092d7ab5f49306eb23  CHANGELOG.md
+          8be44b63071dca3a0725bc20852e3a658aa0a49d44093e2eaecd4572c3bd52f5  RELEASE_NOTES_v9.md
+          8696a10eec86d79802791560b5cf3f0cda70862da82f021701323ac23e351ddb  CODE_OF_CONDUCT.md
+          048ea7bf3402fc2726e90f86990895ed3b3b7778441bafa1232f8142d5b98ad5  FULL_VISUALIZATION_SELF_CHECK.txt
+          9fedf2ca85cf991daba0d5d23fc084ee93a4af588ab55a4b6de34e0cd68cbd3b  .gitignore
+          080646d35321d76b347388b3b1c9b3cb99a81c97daaa5a656bd9d4b61a5e57a9  GITHUB_READY_SELF_CHECK.txt
+          f9404f93e26ca8e86686a813c11578afeef1735d499724ec58ae57f8eac77fb6  CITATION.cff
+          302701dae01527a0974c188ffe423666f2b58dbecefb7fb73cf0258452e10343  SECURITY.md
+          5b4c1c42f39642f28e24953da3f5d44b7d911c1df559f6792258aef2b8d56734  CONTRIBUTING.md
+          86aa95630740ce54f43e7da2200d4c3879b4d46b244270feff7b19b3ed09240a  LICENSE
+          2b0e8c71c05c7c41bbb33583dcaf94832d3585f758e1f60067042813d423f487  requirements.txt
+          1f2ffe974095198ec76b6bb424566f493df23b050f1cdfe1bb791ad5d11d64ed  THIRD_PARTY_NOTICES.md
+          b1188c2bcbac96656ef3b711dcd7c1ed969b93f4f0f326437b297b99df9cb05c  v11_field_quality_v6.py
+          d27fba8e4df408b83a2e3e6599cd787cad2af42a9a71a666fd9efb307443e176  .gitattributes
+          8d255495b2e45006e0187bb2bbd2d4e75e29d33326dead39584a35e13a1d30c3  FULL_RESULTS_SELF_CHECK.txt
+          184e52f535dd7140e16b8be6c81bb8ad531b309c60fcab2716169d9f61b21765  SELF_CHECK_v7.txt
+          bafe77b8df453963e2ea0798f79e6d00375d00496b4ebf5f34fb740b1576c987  undulator_v11_radia_integrated_v9.py
+          e1f973c101219b74c539d545cf6c89853d610a29bc9abec4a5e6481999b19792  SELF_CHECK_v8.txt
+          af0a33319aa61d7c6943ec81aa424fac078058d6ae7159acba2a24114673952b  PREPARE_FOR_GITHUB.command
+          6295e55925ff93dafea598e3b336ce729dd0b45eceec6c757e883109bb2366e0  START_HERE_V11_RADIA_v9.command
+          8144349568803e38f20824abad66bcb8c02c7d5e7e82d0e81a43b300ff58719c  radia_support.py
+          7f885ec44a8b9dc96e2bb09beba30b5672463ed8445935ae18a728e4773def2d  SELF_CHECK_v6.txt
+          532cf7d51d4a50dbb72fff7c35dfb462443e2439eed425058ce716318892cf4b  SELF_CHECK_v9.txt
+          f547af4c33ee1d5a5a6f76436b96def9154f2d00b0758683cedd8478ad6645d8  v11_radia_backend_v8.py
+          691535f9c4067a5a40d7010c27ef4630dd5b4aed56678bf77be7ec7fe93fd480  scripts/preflight_github.py
+          6251d4f2ee7d7b8a12856332ef3befd71a2ce65dae444f79c356192465b0a843  scripts/run_tests.py
+          01cf5663a80a93f29c90f66b2d888834319c713faf98f54e2c0ed89eb16e3bf9  .github/pull_request_template.md
+          25525b1c54d2057343dfbcec0228a63cbdc1394050776e2d151093218f003bb5  .github/dependabot.yml
+          7563081a3bdf41aef8f54686267a6e8360486992196bb23a2a8f5caa65b8a4ab  analysis/metrics.py
+          3b461e0db6d4a80cbec48e68d3ec8e3eca5151cfc6b1bd198413d5823caea896  analysis/geometry_bounds.py
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  analysis/__init__.py
+          dfdc48b28c821c68a3f3d5bd40903b50d3f95a049a38498fa0ae7c3a90e5bde2  tests/test_v11_v6_tracking.py
+          06d752fd7dd427406639794954716b2919613414203f6991c47bdf0f459394e5  tests/test_gui_json_helper.py
+          4e07dbba234ea54a100ff13d8370a47c3581f12be40f7d830af43c1265272bf7  tests/test_v9_final_analysis.py
+          bdca07f2204932a4bb02bbe96e442d9c259372de57c32e6f73eff4d358e3a053  tests/test_v9_scan_api_schema.py
+          4a961c595f9bc877cccf21eed96505f806b0fdb2b0a459ae6ad4bb8a2be971b2  tests/test_full_visualization_layout.py
+          1d27bae058ff8d4ddfcb321fbfe0ebca508971b052db008d5cecd08afc623b6b  tests/test_v6_physics_fixes.py
+          08e74ec693138103e926b4a2f0c440abb8ef72495d9451f9dba2356b07148c68  tests/fake_radia.py
+          762f7e201a7f165519589d27663e911272a66aa1b06efec107d3f3ee2c3644a2  tests/test_v6_field_quality.py
+          d94abd431c66cefa4c7d7a395e82028e07435531ee4bfb2f512903e10ab55657  tests/test_v7_runtime_correctness.py
+          ebb6b28e81fd5b71d1a8b9d64f9f9f185ec8ebafe2fef88d4396111aa5a97e65  tests/test_v8_offaxis_geometry.py
+          38b8b449ee13a7a388f2cf242e8b4bab79e86d74c661cd1c3b4731b2ea3542df  tests/test_v6_bridge.py
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  tests/__init__.py
+          e5049d6d9505cefe13afec40ddee3c75f9b9711c35a0d62ebc4c38aefc8ef2ba  solver/pipeline.py
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  solver/__init__.py
+          e366c331c1d5ce7a7f6b0760cdab465a94cab76afcd247ebfc03b6d7aaeba59b  docs/GITHUB_UPLOAD.md
+          527dbd4a9bc8d342262f21e141cd6365df8ee0350eadbbdcb2cb08d6021a8365  docs/VALIDATION.md
+          033395907810715726a2b369ee3c9e61d4299ab5aba3a1ab2a096eba164422f3  docs/ARCHITECTURE.md
+          00489748e4a2423a311d018fc9f31e3f74096ff8b632cae7e4e919106fce22ee  docs/RADIA_SETUP_MACOS.md
+          6ccfeb7e7f61da00ad5b5c7fc6acb8e4b23a082d518ee9292ac284a7b3141858  reporting/full_results.py
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  reporting/__init__.py
+          ec9532bf2c7dec33c42a4debce2509ca1d93a3dd0ed7bdfabb27b0035f91a267  devices/common.py
+          bfdb0fedc61518c4bc1c5a843e01d073c43c03f730cbf5a9f75aadfdf0d4ccaa  devices/helical.py
+          b8cb32f6aff5f0c376ce60817455e5e5811b8cdfa6997ceb8fe9d4b36a53b536  devices/apple2.py
+          5e401c7e2af038b8e36a74842f19cd47fe88b24b78f25dd9abbe04d494b005d9  devices/elliptical.py
+          7e3021373008616ca82f6218c85ec1d4274cd1a04d1d968959b0c17ea72c0479  devices/factory.py
+          744394b68290dedc4bfee44156db3c4d71dbededae46bd981382dd9eb2f62949  devices/wiggler.py
+          e98996f2772c206ff01bfa7107ebf87359e311ead15e2c7a3ad1b1486c680504  devices/planar.py
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  devices/__init__.py
+          2e73ba8b4fd2d46eb927fd682307e563c9651e78c62e1b2803fe83c2d8caa83a  errors/model.py
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  errors/__init__.py
+          c5e0a7206f81b46e25cbd386aba722cdee89c7b24985221444f4ee78b23b68b1  calibration/target_b0.py
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  calibration/__init__.py
+          109c726b3f64c70229187f91a4d7f28149c46b320052c7e41179a6ff8a46e03f  .github/workflows/ci.yml
+          8a217f0718de81b84178131af41bef5aad0f31f1fdb01cc10b2a4d20bacd0e9f  .github/ISSUE_TEMPLATE/physics_validation.yml
+          e71bea835ed1158881306294d96968f125b0b0c5eff66cd94df559336bd0b210  .github/ISSUE_TEMPLATE/config.yml
+          44836b08dbce5a1748d0352ee3da7bc6022119477b3c4911218cd896d362180a  .github/ISSUE_TEMPLATE/bug_report.yml
+          eb117d0c3624bd482fce51fb9434d38e39997b3dbab6be4fcf487eca223a4348  .github/ISSUE_TEMPLATE/feature_request.yml
+          MANIFEST
+
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+
+          while IFS= read -r line; do
+            hash="${line%%  *}"
+            rel="${line#*  }"
+            mkdir -p "$(dirname "$rel")"
+            cp "/tmp/source/$rel" "$rel"
+          done < /tmp/manifest.txt
+
+          python - <<'PY3'
+          from pathlib import Path
+          import hashlib
+          root=Path('.')
+          expected={}
+          for line in Path('/tmp/manifest.txt').read_text().splitlines():
+              h, rel=line.split('  ',1)
+              expected[rel]=h
+          actual=[]
+          for p in root.rglob('*'):
+              if p.is_file() and '.git' not in p.parts:
+                  rel=p.as_posix()
+                  actual.append(rel)
+                  got=hashlib.sha256(p.read_bytes()).hexdigest()
+                  want=expected.get(rel)
+                  if want is None:
+                      raise SystemExit(f'Unexpected file: {rel}')
+                  if got != want:
+                      raise SystemExit(f'SHA mismatch: {rel} {got} != {want}')
+          missing=sorted(set(expected)-set(actual))
+          if missing:
+              raise SystemExit(f'Missing files: {missing}')
+          print(f'EXACT PACKAGE VERIFICATION PASSED: {len(actual)} files')
+          PY3
+
+          python -m compileall -q .
+          echo "PYTHON COMPILEALL PASSED"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Upload exact V9 full visualization package"
+          git push
