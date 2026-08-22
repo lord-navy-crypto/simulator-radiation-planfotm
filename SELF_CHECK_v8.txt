@@ -1,0 +1,20 @@
+Python compileall: PASS
+V6 RADIA BRIDGE MOCK TEST PASSED
+V11 V6 FULL REAL-MAP TRACKING RANGE TEST PASSED
+V11 JSON NUMPY SERIALIZATION TEST PASSED
+V6 SIX-PHYSICS-FIX REGRESSION TEST PASSED
+V6 CENTRAL-HARMONICS / FULL-INTEGRALS TEST PASSED
+V7 RUNTIME CORRECTNESS TEST PASSED
+V8 OFF-AXIS / GEOMETRY / RESOLUTION TEST PASSED
+offaxis_main: PASS
+observer_specific_scan: PASS
+observer_specific_map: PASS
+no_hidden_96_floor: PASS
+helical_side_swap: PASS
+elliptical_side_swap: PASS
+cross_width_guard: PASS
+apple_xy_offsets: PASS
+safe_gui_width: PASS
+one_launcher: PASS
+np.trapz executable-call scan: PASS (0 hits)
+Launcher mode: 755

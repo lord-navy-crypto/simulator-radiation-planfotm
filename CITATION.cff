@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software in research, please cite this repository."
+title: "V11 RADIA Radiation Studio"
+version: 9.0.0
+date-released: 2026-08-22
+type: software
+license: MIT
+authors:
+  - name: "V11 RADIA Radiation Studio contributors"
+abstract: >-
+  A research-oriented Python and Streamlit workflow connecting RADIA-based
+  insertion-device magnetic-field models to relativistic single-electron
+  trajectory integration and Lienard-Wiechert radiation analysis.
+keywords:
+  - accelerator physics
+  - synchrotron radiation
+  - undulator
+  - wiggler
+  - RADIA
+  - magnetostatics
+  - polarization
+  - scientific computing

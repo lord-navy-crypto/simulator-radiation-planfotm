@@ -1,0 +1,31 @@
+name: Physics / validation issue
+description: Report a physics-model, numerical, benchmark, or interpretation concern
+title: "[Validation] "
+labels: ["validation"]
+body:
+  - type: textarea
+    id: claim
+    attributes:
+      label: Quantity or behavior in question
+    validations:
+      required: true
+  - type: textarea
+    id: parameters
+    attributes:
+      label: Simulation parameters
+      description: Device, period, K/B0, gamma/energy, geometry, resolution, observer angle, seed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result / reference
+      description: Analytic derivation, RADIA benchmark, publication, or measurement reference.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed result
+    validations:
+      required: true

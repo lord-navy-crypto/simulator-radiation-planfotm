@@ -1,0 +1,16 @@
+Python compileall: PASS
+V6 RADIA BRIDGE MOCK TEST PASSED
+V11 V6 FULL REAL-MAP TRACKING RANGE TEST PASSED
+V11 JSON NUMPY SERIALIZATION TEST PASSED
+V6 SIX-PHYSICS-FIX REGRESSION TEST PASSED
+V6 CENTRAL-HARMONICS / FULL-INTEGRALS TEST PASSED
+V7 RUNTIME CORRECTNESS TEST PASSED
+brentq_solver: PASS
+csv_no_undefined_ro: PASS
+csv_period_engine: PASS
+csv_period_gui: PASS
+cache_preserved: PASS
+calibration_gate: PASS
+one_launcher: PASS
+np.trapz executable-call scan: PASS (0 hits)
+Launcher mode target: 755

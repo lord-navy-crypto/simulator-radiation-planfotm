@@ -1,0 +1,28 @@
+V11 RADIA v9 GitHub Full Visualization Edition
+
+Physics/numerical backend hash comparison against V11_RADIA_v9_GITHUB_FULL_RESULTS: PASS (unchanged)
+Python compileall: PASS
+GitHub preflight: PASS
+
+FULL VISUALIZATION LAYOUT TEST PASSED
+V11 JSON NUMPY SERIALIZATION TEST PASSED
+V11 V6 FULL REAL-MAP TRACKING RANGE TEST PASSED
+V6 RADIA BRIDGE MOCK TEST PASSED
+V6 CENTRAL-HARMONICS / FULL-INTEGRALS TEST PASSED
+V6 SIX-PHYSICS-FIX REGRESSION TEST PASSED
+V7 RUNTIME CORRECTNESS TEST PASSED
+V8 OFF-AXIS / GEOMETRY / RESOLUTION TEST PASSED
+V9 FINAL ANALYSIS TEST PASSED
+V9 SCAN API SCHEMA TEST PASSED
+
+All 10 test scripts exited with status 0.
+Major visualization changes:
+- 1920 px maximum content width
+- 2-column precise summary cards instead of 4-column compressed cards
+- 12-digit scientific summary values
+- 10-decimal scientific table display for floating-point columns
+- full-width one-chart-per-row presentation
+- 650 px standard plots / 760 px 3-D plot
+- large full-width numerical tables and per-table CSV downloads
+- 30+ report plot calls with expanded magnetic, trajectory, observer, spectral, polarization, energy and quantum diagnostics
+- Plotly scroll zoom and high-precision hover values

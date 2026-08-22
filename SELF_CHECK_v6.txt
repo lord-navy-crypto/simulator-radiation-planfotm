@@ -1,0 +1,16 @@
+Python compileall: PASS
+V6 RADIA BRIDGE MOCK TEST PASSED
+V11 V6 FULL REAL-MAP TRACKING RANGE TEST PASSED
+V11 JSON NUMPY SERIALIZATION TEST PASSED
+V6 SIX-PHYSICS-FIX REGRESSION TEST PASSED
+V6 CENTRAL-HARMONICS / FULL-INTEGRALS TEST PASSED
+Full-run generalized resonance: PASS
+Generalized theoretical power K_eff: PASS
+Generated wiggler K=5 default: PASS
+Exact real-map z_end terminal event: PASS
+Central K/harmonics vs full I1/I2 split: PASS
+Generated RADIA GUI controls: PASS
+NumPy np.trapz executable-call scan: PASS (0 hits)
+One launcher only: PASS
+Launcher mode: 755
+Real macOS RADIA .so numerical execution still requires the user's Mac.

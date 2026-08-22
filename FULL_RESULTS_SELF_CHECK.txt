@@ -1,0 +1,7 @@
+Numerical backend byte-for-byte unchanged from V9: PASS
+Comprehensive report Plotly output calls: 20
+Python compileall: PASS
+V11 JSON NUMPY SERIALIZATION TEST PASSED
+V9 FINAL ANALYSIS TEST PASSED
+V9 SCAN API SCHEMA TEST PASSED
+FULL RESULT BUNDLE SMOKE PASSED
