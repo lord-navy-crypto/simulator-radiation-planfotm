@@ -1,0 +1,14 @@
+V11 RADIA v9.1 Presentation Enhanced self-check
+
+PASS: physics/numerical backend SHA-256 unchanged from v9 Full Visualization
+PASS: Python compileall
+PASS: 11 test scripts (including scan-presentation enhancement)
+PASS: GitHub preflight
+PASS: full gamma scan UI defaults to 1.25 ... 60000
+PASS: scan density default 31, selectable to 81
+PASS: complete scan table retained and downloadable
+PASS: four representative scan rows highlighted without interpolation
+PASS: optional four-case full current-V11 deep comparison
+PASS: known full-results plot-order rendering issues corrected
+
+Presentation/orchestration changes only. No legacy V4.1 physics calculation was restored.

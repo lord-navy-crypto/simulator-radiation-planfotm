@@ -1,0 +1,21 @@
+{
+  "study_type": "monte_carlo",
+  "base_parameters": {
+    "device": "Planar", "period_mm": 50.0, "periods": 20,
+    "gap_mm": 12.0, "blocks_per_period": 4,
+    "block_width_mm": 10.0, "block_height_mm": 10.0,
+    "longitudinal_fill": 0.9, "br_t": 1.2,
+    "material_mode": "Fixed remanence", "mu_parallel": 1.05,
+    "mu_perpendicular": 1.05, "segmentation": [1, 1, 1],
+    "ellipticity": 0.5, "apple_phase_deg": 90.0,
+    "apple_shift_mode": "Antiparallel", "errors_enabled": true,
+    "field_error_pct": 1.0, "longitudinal_error_mm": 0.05,
+    "transverse_error_mm": 0.05, "angle_error_deg": 0.5,
+    "gap_asymmetry_mm": 0.0, "bank_imbalance_pct": 0.0,
+    "error_seed": 0
+  },
+  "settings": {"axis_samples": 501, "field_margin_periods": 1.0, "electron_energy_GeV": 3.0, "relax": false},
+  "samples": 20,
+  "seed_start": 1000
+}
+

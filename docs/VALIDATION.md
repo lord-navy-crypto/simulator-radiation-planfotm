@@ -18,6 +18,8 @@ The repository currently contains regression checks covering:
 - Radiative-fluence angular weighting.
 - Explicit invalid-pixel masks for failed 2-D angular-map samples.
 - Current scan-helper result schema.
+- Orthogonal-polarization spectral-power addition (`|S1|² + |S2|²`).
+- Runtime physics-compliance PASS/WARNING/FAIL invariants.
 
 Run:
 
@@ -35,6 +37,10 @@ mock regression cases. It does not by itself certify:
 - collective bunch, emittance, wakefield, or coherent-radiation effects;
 - accuracy outside the numerical/physical assumptions of the implemented
   single-electron model.
+
+Every full result also contains `physics_compliance.json` in its result bundle.
+That gate is an operating-point consistency/applicability screen; it does not
+replace real-RADIA convergence or experimental validation.
 
 ## RADIA runtime
 

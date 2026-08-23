@@ -4,3 +4,4 @@ pandas>=2.2
 matplotlib>=3.9
 streamlit>=1.40
 plotly>=5.24
+h5py>=3.10

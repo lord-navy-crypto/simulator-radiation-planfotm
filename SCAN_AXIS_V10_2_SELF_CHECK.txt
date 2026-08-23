@@ -1,0 +1,31 @@
+RADIA Unified v10.3 scan-scope visualization correction
+
+Rule:
+- A cross-scan chart uses the selected independent scan quantity as numeric x.
+- z is reserved for a single device / single operating-point internal diagnostic.
+
+Verified scan axes:
+- velocity -> beta = v/c scan points
+- gamma -> Lorentz-factor scan points
+- K -> undulator-K scan points
+- N_periods -> requested integer period counts
+- observer_distance -> requested distances
+- angle -> requested observation angles
+
+Runtime guard:
+- visible x-axis title must match the selected scan quantity
+- every plotted x value must belong to the stored scan_x array
+- a deliberately substituted non-scan array is rejected
+- full-scan plots are explicitly labelled FULL SCAN TREND
+- local-coordinate plots are explicitly labelled FIXED SCAN POINT
+- velocity/gamma fixed points show beta, m/s, and gamma together
+
+Regression results:
+- V9.3 SCAN AXIS INVARIANTS TEST PASSED
+- V9.4 VELOCITY AXIS VALUES TEST PASSED
+- V9.4 DYNAMIC SELECTED-SCAN AXIS TEST PASSED
+- V10.2 RUNTIME SCAN-AXIS GUARD TEST PASSED
+- V10.3 FIXED-POINT SPEED CONTEXT TEST PASSED
+- SCAN-CENTRIC PRESENTATION ENHANCEMENT TEST PASSED
+- FULL VISUALIZATION LAYOUT TEST PASSED
+- UNIFIED TWO-STAGE MAGNET-TO-SCAN WORKFLOW TEST PASSED

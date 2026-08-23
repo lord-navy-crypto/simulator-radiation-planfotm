@@ -158,7 +158,9 @@ def result_bundle_zip(r, v11, dev=None, field_quality_fn=None, extras=None):
             "README.txt",
             "V11 RADIA full numerical result export\n"
             "Arrays are exported as CSV where appropriate; nested diagnostics are in JSON.\n"
-            "The radiation model is single-electron research software.\n",
+            "The radiation model is single-electron research software.\n"
+            "The observer field is the causal retarded 1/R acceleration term, not the complete 1/R^2 near field.\n"
+            "Read physics_compliance.json before interpreting the numerical result.\n",
         )
         for name, df in tables.items():
             if isinstance(df, pd.DataFrame):
@@ -171,7 +173,8 @@ def result_bundle_zip(r, v11, dev=None, field_quality_fn=None, extras=None):
         for name in [
             "Stokes", "trajectory_phase", "energy_accounting", "quantum",
             "photon_yield", "spectral_photon_yield", "theory_residuals",
-            "harmonic_ratios", "pulse", "traj", "K_components"
+            "harmonic_ratios", "pulse", "traj", "K_components",
+            "physics_compliance"
         ]:
             if name in r:
                 zf.writestr(f"{name}.json", json.dumps(_json_safe(r[name]), indent=2))
@@ -314,6 +317,21 @@ def _plot(st, fig, title, x_title, y_title, height=PLOT_HEIGHT, hovermode="x uni
     )
 
 
+def _secondary_plot(st, fig, title, x_title, y_title, height=PLOT_HEIGHT, hovermode="closest"):
+    """Render a cross-variable/locus diagnostic collapsed by default.
+
+    Scan-level plots belong in reporting.scan_overview and use the scan variable
+    on the horizontal axis. These plots are intentionally secondary because both
+    axes are derived quantities from one fixed scan point.
+    """
+    with st.expander(f"Secondary relationship · {title}", expanded=False):
+        st.caption(
+            "Single-point diagnostic: both axes are derived from the selected case; "
+            "this is not a scan trend plot."
+        )
+        _plot(st, fig, title, x_title, y_title, height=height, hovermode=hovermode)
+
+
 def _cumtrap(y, x):
     y = np.asarray(y, dtype=float)
     x = np.asarray(x, dtype=float)
@@ -347,6 +365,144 @@ def _summary_table(r, stokes):
     })
 
 
+def render_fixed_point_orbit_dashboard(st, r, dev=None, key_prefix="fixed_point_orbit"):
+    """Render the always-visible 3-D orbit and transverse-radius diagnostics."""
+    pos = _arr(r["r"])
+    ts = _arr(r["t_src"])
+    z = pos[:, 2]
+    progress = np.linspace(0.0, 1.0, len(pos))
+
+    st.markdown("## 3-D particle trajectory and orbit radius — fixed scan point")
+    st.info(
+        "This is an interactive 3-D particle trajectory for the current fixed operating/scan point. "
+        "Drag to rotate, scroll to zoom, and hover to read coordinates. The radius plot below uses "
+        "z only as the local coordinate inside this one fixed point; scan-level plots still use the selected scan quantity."
+    )
+
+    pos_mm = pos * 1e3
+    fig = go.Figure()
+    fig.add_trace(go.Scatter3d(
+        x=pos_mm[:, 0], y=pos_mm[:, 1], z=pos_mm[:, 2],
+        mode="lines", name="electron path",
+        line={"width": 6, "color": progress, "colorscale": "Turbo", "showscale": True,
+              "colorbar": {"title": "Path progress"}},
+        customdata=np.column_stack([ts, progress]),
+        hovertemplate=(
+            "x=%{x:.10e} mm<br>y=%{y:.10e} mm<br>z=%{z:.10e} mm"
+            "<br>source time=%{customdata[0]:.10e} s"
+            "<br>path progress=%{customdata[1]:.6f}<extra></extra>"
+        ),
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[pos_mm[0, 0]], y=[pos_mm[0, 1]], z=[pos_mm[0, 2]],
+        mode="markers+text", name="entrance", text=["entrance"],
+        textposition="top center", marker={"size": 7, "color": "#22c55e"},
+        hovertemplate="Entrance<br>x=%{x:.10e} mm<br>y=%{y:.10e} mm<br>z=%{z:.10e} mm<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[pos_mm[-1, 0]], y=[pos_mm[-1, 1]], z=[pos_mm[-1, 2]],
+        mode="markers+text", name="exit", text=["exit"],
+        textposition="top center", marker={"size": 7, "color": "#ef4444"},
+        hovertemplate="Exit<br>x=%{x:.10e} mm<br>y=%{y:.10e} mm<br>z=%{z:.10e} mm<extra></extra>",
+    ))
+    fig.update_layout(
+        title={"text": "3-D electron trajectory — physical coordinates", "x": 0.01},
+        height=PLOT_HEIGHT_3D, margin=dict(l=35, r=35, t=90, b=40),
+        scene={
+            "xaxis_title": "x (mm)", "yaxis_title": "y (mm)", "zaxis_title": "z (mm)",
+            "aspectmode": "data",
+        },
+        font=dict(size=15),
+    )
+    st.plotly_chart(
+        fig, width="stretch", key=f"{key_prefix}_physical_3d",
+        config={"displaylogo": False, "scrollZoom": True, "responsive": True},
+    )
+    st.caption(
+        "Physical-coordinate view: x, y and z all use millimetres and preserve numerical spatial scale. "
+        "A long undulator can therefore look nearly straight even when the transverse motion is physically present."
+    )
+
+    lambda_u = float(getattr(dev, "lambda_u", 0.0)) if dev is not None else 0.0
+    if lambda_u <= 0.0:
+        ku = float(r.get("k_u", 0.0))
+        lambda_u = 2.0 * np.pi / ku if ku > 0.0 else max(float(np.ptp(z)), 1.0)
+    z_period = (z - z[0]) / max(lambda_u, 1e-30)
+    centre_basis = np.column_stack([np.ones_like(z), z - np.nanmean(z)])
+    x_centreline = centre_basis @ np.linalg.lstsq(centre_basis, pos[:, 0], rcond=None)[0]
+    y_centreline = centre_basis @ np.linalg.lstsq(centre_basis, pos[:, 1], rcond=None)[0]
+    x_orbit = pos[:, 0] - x_centreline
+    y_orbit = pos[:, 1] - y_centreline
+    fig = go.Figure()
+    fig.add_trace(go.Scatter3d(
+        x=x_orbit * 1e6, y=y_orbit * 1e6, z=z_period,
+        mode="lines", name="centreline-subtracted electron orbit",
+        line={"width": 7, "color": progress, "colorscale": "Turbo", "showscale": True,
+              "colorbar": {"title": "Path progress"}},
+        customdata=np.column_stack([z, ts]),
+        hovertemplate=(
+            "x=%{x:.10e} µm<br>y=%{y:.10e} µm<br>z/λu=%{z:.10e}"
+            "<br>z=%{customdata[0]:.10e} m<br>source time=%{customdata[1]:.10e} s<extra></extra>"
+        ),
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[x_orbit[0] * 1e6, x_orbit[-1] * 1e6],
+        y=[y_orbit[0] * 1e6, y_orbit[-1] * 1e6],
+        z=[z_period[0], z_period[-1]],
+        mode="markers+text", name="entrance / exit", text=["entrance", "exit"],
+        textposition="top center", marker={"size": 7, "color": ["#22c55e", "#ef4444"]},
+        hovertemplate="%{text}<br>x=%{x:.10e} µm<br>y=%{y:.10e} µm<br>z/λu=%{z:.10e}<extra></extra>",
+    ))
+    fig.update_layout(
+        title={"text": "3-D electron orbit — transverse motion magnified · centreline subtracted", "x": 0.01},
+        height=PLOT_HEIGHT_3D, margin=dict(l=35, r=35, t=90, b=40),
+        scene={
+            "xaxis_title": "x (µm)", "yaxis_title": "y (µm)",
+            "zaxis_title": "Longitudinal position z / λu",
+            "aspectmode": "manual", "aspectratio": {"x": 0.8, "y": 0.8, "z": 2.5},
+        },
+        font=dict(size=15),
+    )
+    st.plotly_chart(
+        fig, width="stretch", key=f"{key_prefix}_magnified_3d",
+        config={"displaylogo": False, "scrollZoom": True, "responsive": True},
+    )
+    st.warning(
+        "Visualization scaling notice: this view subtracts the best-fit transverse centreline, magnifies x/y, "
+        "and uses z/λu longitudinally. It reveals the local orbit shape and handedness but does not preserve "
+        "the physical geometric aspect ratio. The physical-coordinate plot above retains the real drift."
+    )
+
+    orbit_radius_um = np.hypot(x_orbit, y_orbit) * 1e6
+    design_axis_radius_um = np.hypot(pos[:, 0], pos[:, 1]) * 1e6
+    radius_fig = go.Figure([
+        _trace(z, orbit_radius_um, "Orbit-centred transverse radius"),
+        _trace(z, design_axis_radius_um, "Distance from design axis"),
+    ])
+    radius_fig.add_hline(
+        y=float(np.nanmean(orbit_radius_um)), line_dash="dash", line_color="#22c55e",
+        annotation_text="mean orbit-centred radius",
+    )
+    radius_fig.update_layout(
+        title="Transverse orbit radius along the fixed-point trajectory",
+        xaxis_title="Longitudinal position z (m)", yaxis_title="Transverse radius (µm)",
+        height=PLOT_HEIGHT, hovermode="x unified",
+    )
+    st.plotly_chart(
+        radius_fig, width="stretch", key=f"{key_prefix}_radius",
+        config={"displaylogo": False, "scrollZoom": True, "responsive": True},
+    )
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Mean orbit-centred radius", f"{float(np.nanmean(orbit_radius_um)):.10e} µm")
+    c2.metric("Maximum orbit-centred radius", f"{float(np.nanmax(orbit_radius_um)):.10e} µm")
+    c3.metric("Maximum distance from design axis", f"{float(np.nanmax(design_axis_radius_um)):.10e} µm")
+    st.caption(
+        "Orbit-centred radius is measured after subtracting best-fit linear centre lines xc(z), yc(z). "
+        "Distance from design axis = √(x²+y²). They are shown separately so orbit drift/offset is not "
+        "mistaken for oscillation amplitude."
+    )
+
+
 def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
     """Render a deliberately long, wide, scrollable report without re-running physics."""
     tables = result_tables(r, v11, dev, field_quality_fn)
@@ -369,12 +525,36 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
     tp = _arr(r.get("tp_log", np.full_like(tobs, np.nan)))
     stokes = dict(r.get("Stokes", {}))
 
-    st.markdown("## Comprehensive result output — expanded visualization")
+    st.markdown("## Comprehensive single-point result output")
     st.caption(
-        "Long-scroll mode: figures are intentionally full-width and tall. "
-        "Hover values use high precision, major numerical tables are displayed directly, "
-        "and every table can also be downloaded as CSV."
+        "This section is a deep analysis of one fixed operating / scan point. Primary plots "
+        "use the natural independent coordinate for that case: magnetic-axis z, observer time, "
+        "frequency, or photon energy. Cross-variable loci and phase-space projections are "
+        "collapsed as secondary diagnostics so they are not confused with scan trends."
     )
+
+    # Put the requested orbit first, before long compliance, field and table sections.
+    render_fixed_point_orbit_dashboard(
+        st, r, dev=dev, key_prefix=f"fixed_point_orbit_{id(r)}"
+    )
+
+    compliance = dict(r.get("physics_compliance", {}) or {})
+    if compliance:
+        status = str(compliance.get("overall_status", "WARNING"))
+        if status == "PASS":
+            st.success("Physics compliance gate: PASS — all implemented invariants passed.")
+        elif status == "FAIL":
+            st.error("Physics compliance gate: FAIL — do not treat this operating point as physically usable until failed checks are resolved.")
+        else:
+            st.warning("Physics compliance gate: WARNING — numerical invariants passed, but one or more model-domain conditions need review.")
+        st.caption(str(compliance.get("model_scope", "")))
+        checks = pd.DataFrame(compliance.get("checks", []))
+        if not checks.empty:
+            st.dataframe(checks, width="stretch", hide_index=True, height=420)
+        st.caption(
+            "This gate is an internal consistency and applicability check, not facility certification. "
+            "A real RADIA device still requires geometry/material/segmentation convergence and comparison with measurement or an independent solver."
+        )
 
     # Precise summary: only two cards per row to avoid clipping.
     summary_metrics = [
@@ -439,8 +619,8 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
                 hovertemplate="Bx=%{x:.10e} T<br>By=%{y:.10e} T<extra></extra>",
             )
         ])
-        _plot(st, fig, "Transverse magnetic-field locus", "Bx (T)", "By (T)", height=700, hovermode="closest")
         fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        _secondary_plot(st, fig, "Transverse magnetic-field locus", "Bx (T)", "By (T)", height=700, hovermode="closest")
 
         phase = np.unwrap(np.arctan2(by, bx))
         fig = go.Figure([_trace(zz, phase, "atan2(By,Bx)")])
@@ -484,29 +664,10 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
     # ---------------------------------------------------------------
     st.markdown("## 2 · Electron trajectory, orbit and phase-space diagnostics")
 
-    fig = go.Figure([
-        go.Scatter3d(
-            x=pos[:, 0] * 1e3,
-            y=pos[:, 1] * 1e3,
-            z=pos[:, 2],
-            mode="lines",
-            name="electron",
-            hovertemplate="x=%{x:.10e} mm<br>y=%{y:.10e} mm<br>z=%{z:.10e} m<extra></extra>",
-        )
-    ])
-    fig.update_layout(
-        title={"text": "3-D electron trajectory", "x": 0.01},
-        height=PLOT_HEIGHT_3D,
-        margin=dict(l=35, r=35, t=90, b=40),
-        scene={
-            "xaxis_title": "x (mm)",
-            "yaxis_title": "y (mm)",
-            "zaxis_title": "z (m)",
-            "aspectmode": "data",
-        },
-        font=dict(size=15),
+    st.caption(
+        "The interactive physical-scale 3-D trajectory, magnified 3-D orbit and radius-versus-z chart "
+        "are displayed at the top of this fixed-point report so they cannot be missed."
     )
-    st.plotly_chart(fig, width="stretch", config={"displaylogo": False, "scrollZoom": True, "responsive": True})
 
     for arr, name, unit_scale, unit in [
         (pos[:, 0], "x(z)", 1e3, "mm"),
@@ -521,8 +682,8 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
             name="orbit", hovertemplate="x=%{x:.10e} mm<br>y=%{y:.10e} mm<extra></extra>"
         )
     ])
-    _plot(st, fig, "Transverse orbit locus", "x (mm)", "y (mm)", height=700, hovermode="closest")
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    _secondary_plot(st, fig, "Transverse orbit locus", "x (mm)", "y (mm)", height=700, hovermode="closest")
 
     xp = vel[:, 0] / vz
     yp = vel[:, 1] / vz
@@ -536,7 +697,7 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
             name="x–x′", hovertemplate="x=%{x:.10e} mm<br>x′=%{y:.10e} mrad<extra></extra>"
         )
     ])
-    _plot(st, fig, "Horizontal phase-space projection", "x (mm)", "x′ (mrad)", height=700, hovermode="closest")
+    _secondary_plot(st, fig, "Horizontal phase-space projection", "x (mm)", "x′ (mrad)", height=700, hovermode="closest")
 
     fig = go.Figure([
         go.Scatter(
@@ -544,7 +705,7 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
             name="y–y′", hovertemplate="y=%{x:.10e} mm<br>y′=%{y:.10e} mrad<extra></extra>"
         )
     ])
-    _plot(st, fig, "Vertical phase-space projection", "y (mm)", "y′ (mrad)", height=700, hovermode="closest")
+    _secondary_plot(st, fig, "Vertical phase-space projection", "y (mm)", "y′ (mrad)", height=700, hovermode="closest")
 
     for j, nm in enumerate(["βx", "βy", "βz"]):
         fig = go.Figure([_trace(z, beta[:, j], nm)])
@@ -601,7 +762,7 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
             hovertemplate="E1=%{x:.10e} V/m<br>E2=%{y:.10e} V/m<extra></extra>"
         )
     ])
-    _plot(st, fig, "Time-domain polarization locus", "E1 (V/m)", "E2 (V/m)", height=700, hovermode="closest")
+    _secondary_plot(st, fig, "Time-domain polarization locus", "E1 (V/m)", "E2 (V/m)", height=700, hovermode="closest")
 
     if len(tp) == len(tobs) and np.any(np.isfinite(tp)):
         fig = go.Figure([_trace(tfs, (tp - tp[0]) * 1e15, "t_ret")])
@@ -626,28 +787,28 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
     logmask = (freq > 0) & (power > 0)
     if np.any(logmask):
         fig = go.Figure([_trace(freq[logmask], power[logmask], "|FFT|²")])
-        _plot(st, fig, "Radiation spectrum — log/log view", "Frequency (Hz)", "Spectral power proxy", height=720)
         fig.update_xaxes(type="log")
         fig.update_yaxes(type="log")
+        _plot(st, fig, "Radiation spectrum — log/log view", "Frequency (Hz)", "Spectral power proxy", height=720)
 
     band = (freq > 0.5 * float(r["f_expected"])) & (freq < 1.5 * float(r["f_expected"]))
     if np.any(band):
         pnorm = power[band] / max(float(np.max(power[band])), 1e-300)
         fig = go.Figure([_trace(freq[band] / float(r["f_expected"]), pnorm, "normalized spectrum")])
-        _plot(st, fig, "Fundamental spectral window", "f / f_theory", "Normalized spectral power")
         fig.add_vline(
             x=float(r["f0"]) / float(r["f_expected"]),
             line_dash="dash",
             annotation_text="simulated f₀",
         )
+        _plot(st, fig, "Fundamental spectral window", "f / f_theory", "Normalized spectral power")
 
     photon_e = float(v11.h_planck) * freq / float(v11.qe)
     emask = (photon_e > 0) & (power > 0)
     if np.any(emask):
         fig = go.Figure([_trace(photon_e[emask], power[emask], "spectral power")])
-        _plot(st, fig, "Spectrum on photon-energy axis", "Photon energy (eV)", "Spectral power proxy", height=720)
         fig.update_xaxes(type="log")
         fig.update_yaxes(type="log")
+        _plot(st, fig, "Spectrum on photon-energy axis", "Photon energy (eV)", "Spectral power proxy", height=720)
 
     hrs = r.get("harmonic_ratios", {})
     hdf = pd.DataFrame({
@@ -689,16 +850,19 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
         ],
     })
 
+    # Plot only dimensionless normalized polarization quantities together.
+    # Keep raw Stokes I in the exact table because it does not share their scale/units.
+    pol_df = sdf[sdf["parameter"] != "I"].copy()
     fig = go.Figure([
         go.Bar(
-            x=sdf["parameter"],
-            y=sdf["value"],
-            text=[_fmt_value(v, scientific=True) for v in sdf["value"]],
+            x=pol_df["parameter"],
+            y=pol_df["value"],
+            text=[_fmt_value(v, scientific=True) for v in pol_df["value"]],
             textposition="outside",
             hovertemplate="%{x}<br>%{y:.10e}<extra></extra>",
         )
     ])
-    _plot(st, fig, "Stokes / polarization summary", "Parameter", "Value", height=650, hovermode="closest")
+    _plot(st, fig, "Normalized polarization summary", "Polarization quantity", "Dimensionless value", height=650, hovermode="closest")
 
     theta = np.linspace(0, 2 * np.pi, 400)
     fig = go.Figure()
@@ -709,9 +873,9 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
         marker={"size": 14},
         hovertemplate="Q/I=%{x:.10e}<br>U/I=%{y:.10e}<extra></extra>",
     ))
-    _plot(st, fig, "Normalized Q–U polarization plane", "Q/I", "U/I", height=700, hovermode="closest")
     fig.update_xaxes(range=[-1.1, 1.1])
     fig.update_yaxes(range=[-1.1, 1.1], scaleanchor="x", scaleratio=1)
+    _secondary_plot(st, fig, "Normalized Q–U polarization plane", "Q/I", "U/I", height=700, hovermode="closest")
 
     st.dataframe(
         sdf,
@@ -719,6 +883,11 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
         hide_index=True,
         height=350,
         column_config=_numeric_column_config(st, sdf),
+    )
+    st.caption(
+        "Polarization convention: right-handed (e1, e2, n) observer basis with "
+        "V = +2 Im(E1 E2*). The sign of circular polarization depends on the declared "
+        "basis/handedness convention; compare signs only after matching conventions."
     )
 
     # ---------------------------------------------------------------
@@ -740,21 +909,10 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
             st.markdown(f"### {title}")
             ddf = _dict_df(obj)
             st.dataframe(ddf, width="stretch", hide_index=True, height=min(560, 130 + 45 * max(1, len(ddf))))
-            numeric_rows = []
-            for k, v in obj.items():
-                if isinstance(v, (int, float, np.number)) and np.isfinite(float(v)):
-                    numeric_rows.append((str(k), float(v)))
-            if numeric_rows and len(numeric_rows) <= 14:
-                fig = go.Figure([
-                    go.Bar(
-                        x=[x[0] for x in numeric_rows],
-                        y=[x[1] for x in numeric_rows],
-                        text=[_fmt_value(x[1], scientific=True) for x in numeric_rows],
-                        textposition="outside",
-                        hovertemplate="%{x}<br>%{y:.10e}<extra></extra>",
-                    )
-                ])
-                _plot(st, fig, f"{title} — numerical overview", "Quantity", "Value", height=620, hovermode="closest")
+            st.caption(
+                "Values with different units are kept in the exact table rather than plotted "
+                "against each other on one arbitrary 'Quantity vs Value' chart."
+            )
 
     # ---------------------------------------------------------------
     # 7. Quantum
@@ -774,7 +932,7 @@ def render_full_results(st, r, v11, dev=None, field_quality_fn=None):
                 name="trajectory", hovertemplate="χe=%{x:.10e}<br>g=%{y:.10e}<extra></extra>"
             )
         ])
-        _plot(st, fig, "Gaunt factor versus χe", "χe", "Gaunt factor", height=700, hovermode="closest")
+        _secondary_plot(st, fig, "Gaunt factor versus χe", "χe", "Gaunt factor", height=700, hovermode="closest")
 
         _show_table(st, "Quantum numerical table", qdf, "quantum", height=620)
     else:

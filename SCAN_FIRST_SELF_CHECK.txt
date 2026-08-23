@@ -1,0 +1,11 @@
+V11 RADIA v9.2 Scan-First Visualization self-check
+
+PASS: every scan-level chart is constructed from scan_x on the horizontal axis.
+PASS: representative markers are existing scan rows only; no interpolation creates scan points.
+PASS: any existing scan row can be selected for full latest-V11 deep analysis.
+PASS: deep analysis supports gamma, K, N_periods, observer_distance, and angle scan modes.
+PASS: single-case primary axes are z, observer time, frequency, or photon energy where appropriate.
+PASS: cross-variable/locus plots are secondary and collapsed by default.
+PASS: mixed-unit Quantity-vs-Value overview bars removed.
+PASS: physics/numerical backend hashes unchanged.
+PASS: regression suite, preflight, compileall and ZIP integrity verified.

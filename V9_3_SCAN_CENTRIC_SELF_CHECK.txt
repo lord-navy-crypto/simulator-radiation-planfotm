@@ -1,0 +1,35 @@
+V11 RADIA v9.3 Scan-Centric Research Visualization
+
+PRIMARY VISUALIZATION INVARIANT
+- Every scan-level primary figure uses scan_x (the chosen independent scan variable) on the x-axis.
+- Each primary chart contains one dependent physical observable.
+- A theory/reference curve is allowed only for that same observable.
+- Output-vs-output loci remain secondary single-case diagnostics.
+
+REPRESENTATIVE CASES
+- 3–6 existing scan rows can be proposed.
+- Coverage and Feature-aware strategies never invent displayed data.
+- Full V11 representative analyses use natural axes: z, observer time, frequency, photon energy.
+
+ERROR ANALYSIS
+- Physical strengths are user-controlled for all six RADIA error sources.
+- One-error-at-a-time strength sweeps use physical error strength as x.
+- All-selected error sweeps use a nominal-strength multiplier as x.
+- Same random seed is retained through a strength sweep for controlled comparison.
+
+BACKEND INTEGRITY
+- undulator_v11_radia_integrated_v9.py unchanged
+- v11_radia_backend_v8.py unchanged
+- v11_field_quality_v6.py unchanged
+- solver/pipeline.py unchanged
+- devices/factory.py unchanged
+- errors/model.py unchanged
+- calibration/target_b0.py unchanged
+
+VALIDATION
+- Python compileall PASS
+- Scan-centric presentation test PASS
+- V9.3 scan-axis invariant test PASS
+- Full visualization layout test PASS
+- V6/V7/V8/V9 regression tests PASS
+- GitHub preflight PASS

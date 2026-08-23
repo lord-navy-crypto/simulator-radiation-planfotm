@@ -11,11 +11,13 @@ import matplotlib.pyplot as plt
 import time
 from concurrent.futures import ProcessPoolExecutor
 
+# SI / CODATA constants.  c, e and h are exact in the revised SI; the other
+# values below follow the 2022 CODATA adjustment at the precision useful here.
 c0 = 299792458.0
 qe = 1.602176634e-19
-eps_0 = 8.8541878128e-12
-mu_0 = 4 * np.pi * 1e-7
-me = 9.1093837015e-31
+eps_0 = 8.8541878188e-12
+mu_0 = 1.25663706127e-6
+me = 9.1093837139e-31
 
 # ---------------- Semiclassical quantum-radiation correction ----------------
 # Set False to recover the purely classical radiation-reaction model.
@@ -419,7 +421,12 @@ def observer_signal(
     r_obs, r_spl, v_spl, a_spl, t0, t1, f_exp, *,
     n_obs=None, coarse_samples=1600, min_cycles=10
 ):
-    """Build a fresh observer-specific time window and evaluate LW radiation."""
+    """Build an observer-specific window and evaluate the LW radiation term.
+
+    ``eval_E`` deliberately evaluates the retarded 1/R acceleration field.  It
+    does not include the 1/R**2 velocity/Coulomb term, so callers must present
+    the result as a radiation-zone model rather than a complete near field.
+    """
     to0, to1 = observer_time_bounds(r_obs, r_spl, t0, t1)
     nc = max(400, int(coarse_samples))
     to_coarse = np.linspace(to0, to1, nc)
@@ -543,12 +550,24 @@ def make_initial_state_device(gamma0, device, injection=None):
             "initial_condition_model": "physical_entry",
         }
 
-    kc = device_K_components(device, me)
-    Kx, Ky = kc["Kx"], kc["Ky"]
+    K0 = float(device.K(me))
+    harmonics = dict(getattr(device, "harmonics", {}) or {})
+    # A periodic matched orbit depends on the field integral.  Harmonic n
+    # contributes h_n/n to transverse velocity and h_n/n² to position.
+    velocity_factor = 1.0 + sum(float(h) / int(n) for n, h in harmonics.items())
+    position_factor = 1.0 + sum(float(h) / (int(n) ** 2) for n, h in harmonics.items())
+    phase = float(getattr(device, "phase_mismatch", 0.0))
+    bx_signed = float(getattr(device, "bx_scale", 1.0))
+    by_signed = (
+        float(getattr(device, "handedness", 1.0))
+        * float(getattr(device, "by_scale", 1.0))
+        * float(getattr(device, "transverse_imbalance", 1.0))
+    )
 
-    # Nominal transverse velocity at z=0 from the chosen magnetic phase.
-    vy_nom = Kx * c0 / gamma0
-    vx_nom = 0.0
+    # Nominal periodic transverse velocity at z=0 for the full configured
+    # fundamental + odd-harmonic analytic field.
+    vx_nom = by_signed * K0 * c0 / gamma0 * velocity_factor * np.sin(phase)
+    vy_nom = bx_signed * K0 * c0 / gamma0 * velocity_factor
 
     vx_err = speed * np.tan(float(inj["angle_x_rad"]))
     vy_err = speed * np.tan(float(inj["angle_y_rad"]))
@@ -563,11 +582,11 @@ def make_initial_state_device(gamma0, device, injection=None):
     ku = device.k_u
     # By drives x motion. handedness changes its sign.
     Rx = (
-        device.handedness * Ky * c0 / gamma0
+        by_signed * K0 * c0 / gamma0 * position_factor * np.cos(phase)
         / (ku * max(vz, 1e-30))
     )
     # Bx drives y motion; at z=0 y is near the center for this phase convention.
-    Ry = Kx * c0 / gamma0 / (ku * max(vz, 1e-30))
+    Ry = bx_signed * K0 * c0 / gamma0 * position_factor / (ku * max(vz, 1e-30))
 
     init_pos = np.array([
         -Rx + float(inj["x_offset_m"]),
@@ -584,6 +603,8 @@ def make_initial_state_device(gamma0, device, injection=None):
         "R_exact_nominal": float(np.hypot(Rx, Ry)),
         "Rx_nominal": float(Rx),
         "Ry_nominal": float(Ry),
+        "harmonic_velocity_match_factor": float(velocity_factor),
+        "harmonic_position_match_factor": float(position_factor),
         "injection": inj,
         "device_name": device.device_name,
     }
@@ -1129,7 +1150,11 @@ def get_spec(t_obs, Eo, e1, e2, f_exp):
     freq = np.fft.fftfreq(n, dt)
     pos = freq > 0
     fp = freq[pos]
-    amp = np.abs(s1[pos]) + np.abs(s2[pos])
+    # Orthogonal polarization components add in spectral *power*, not in
+    # scalar amplitude.  Returning sqrt(total power) keeps the historical
+    # ``fft`` amplitude interface while ensuring every downstream ``fft**2``
+    # quantity is |S1|^2 + |S2|^2 without an unphysical cross term.
+    amp = np.sqrt(np.abs(s1[pos]) ** 2 + np.abs(s2[pos]) ** 2)
     nyq = 0.95 * 0.5 / dt
     keep = fp < nyq
     fp = fp[keep]
@@ -1167,7 +1192,9 @@ def get_spec(t_obs, Eo, e1, e2, f_exp):
         "harmonic_ratios": harmonic_diag,
         "Stokes": {
             "I": I, "Q": Q, "U": U, "V": V,
-            "P_lin": P_lin, "P_circ": P_circ
+            "P_lin": P_lin, "P_circ": P_circ,
+            "basis_convention": "right-handed (e1, e2, n)",
+            "V_convention": "+2 Im(E1 E2*)",
         }
     }
 
@@ -1272,6 +1299,152 @@ def energy_accounting(ts, gam, P_rad, m_part=me):
         "balance_residual_J": float(residual),
         "relative_mismatch": float(mismatch),
         "mismatch_fraction_initial_energy": float(mismatch_initial),
+    }
+
+
+def physics_compliance_assessment(result, device):
+    """Return a transparent, machine-readable physics validity checklist.
+
+    ``PASS`` means an implemented invariant or numerical acceptance criterion
+    was satisfied. ``WARNING`` marks a model-domain limitation or a quantity
+    that needs user review. ``FAIL`` means the computed operating point should
+    not be treated as physically usable. This is an internal consistency audit,
+    not facility certification or experimental validation.
+    """
+    rows = []
+
+    def add(check, status, value, criterion, meaning):
+        rows.append({
+            "check": str(check),
+            "status": str(status),
+            "value": str(value),
+            "criterion": str(criterion),
+            "meaning": str(meaning),
+        })
+
+    gamma = np.asarray(result.get("g_arr", []), dtype=float)
+    u = np.asarray(result.get("u", []), dtype=float)
+    if gamma.size and u.ndim == 2 and u.shape[0] == gamma.size:
+        speed = np.linalg.norm(u / (gamma[:, None] * me), axis=1)
+        beta_max = float(np.max(speed / c0))
+        state_ok = bool(
+            np.all(np.isfinite(gamma)) and np.all(gamma >= 1.0)
+            and np.isfinite(beta_max) and beta_max < 1.0
+        )
+        add(
+            "Relativistic state", "PASS" if state_ok else "FAIL",
+            f"gamma_min={np.min(gamma):.6g}; beta_max={beta_max:.12g}",
+            "gamma >= 1 and beta < 1", "Four-momentum remains subluminal.",
+        )
+    else:
+        add("Relativistic state", "FAIL", "missing trajectory arrays",
+            "finite gamma/u arrays", "Trajectory state cannot be audited.")
+
+    f0 = float(result.get("f0", np.nan))
+    fth = float(result.get("f_expected", np.nan))
+    fres = abs(f0 - fth) / fth if fth > 0.0 and np.isfinite(f0) else np.inf
+    add(
+        "Undulator resonance", "PASS" if fres <= 0.10 else "WARNING",
+        f"relative residual={fres:.6g}", "|f_sim/f_theory - 1| <= 10%",
+        "Checks the generalized planar/helical/elliptical resonance relation.",
+    )
+
+    energy = dict(result.get("energy_accounting", {}) or {})
+    mismatch = abs(float(energy.get("relative_mismatch", np.inf)))
+    mismatch_e0 = abs(float(energy.get("mismatch_fraction_initial_energy", np.inf)))
+    # When the radiated fraction is extremely small, the loss-relative ratio
+    # is ill-conditioned even though total-energy closure is excellent. Accept
+    # either a tight radiation-loss-relative test or a tight total-energy test.
+    energy_status = (
+        "PASS" if (mismatch <= 2e-2 or mismatch_e0 <= 1e-10)
+        else "WARNING" if mismatch <= 1e-1
+        else "FAIL"
+    )
+    add(
+        "Energy accounting", energy_status,
+        f"loss-relative={mismatch:.6g}; initial-energy-relative={mismatch_e0:.6g}",
+        "PASS: loss-relative <= 2% or total-energy-relative <= 1e-10; WARNING: loss-relative <= 10%",
+        "Particle energy loss must match integrated radiated power; refine tracking when warned.",
+    )
+
+    st = dict(result.get("Stokes", {}) or {})
+    plin = float(st.get("P_lin", np.nan))
+    pcirc = float(st.get("P_circ", np.nan))
+    pol_norm = np.sqrt(plin*plin + pcirc*pcirc)
+    pol_ok = np.isfinite(pol_norm) and pol_norm <= 1.0 + 1e-9
+    add(
+        "Stokes realizability", "PASS" if pol_ok else "FAIL",
+        f"sqrt(P_lin^2+P_circ^2)={pol_norm:.12g}", "<= 1",
+        "Uses V=+2 Im(E1 E2*) in the right-handed (e1,e2,n) basis.",
+    )
+
+    tobs = np.asarray(result.get("t_obs", []), dtype=float)
+    if len(tobs) >= 2 and f0 > 0.0:
+        dt = float(np.median(np.diff(tobs)))
+        samples_per_cycle = 1.0 / (f0 * dt) if dt > 0.0 else 0.0
+        sample_status = "PASS" if samples_per_cycle >= 8.0 else "FAIL"
+        add(
+            "Observer-time sampling", sample_status,
+            f"samples/cycle={samples_per_cycle:.6g}", ">= 8",
+            "Controls aliasing near the simulated fundamental.",
+        )
+    else:
+        add("Observer-time sampling", "FAIL", "unavailable", ">= 8 samples/cycle",
+            "Observer waveform cannot be sampled-audited.")
+
+    r_obs = np.asarray(result.get("r_obs", []), dtype=float)
+    pos = np.asarray(result.get("r", []), dtype=float)
+    if r_obs.shape == (3,) and pos.ndim == 2 and len(pos):
+        distance = float(np.min(np.linalg.norm(r_obs[None, :] - pos, axis=1)))
+        source_extent = max(float(np.ptp(pos[:, 2])), float(getattr(device, "lambda_u", 0.0)), 1e-30)
+        ratio = distance / source_extent
+        zone_status = "PASS" if ratio >= 10.0 else "WARNING"
+        add(
+            "Radiation-zone use", zone_status,
+            f"minimum distance/source extent={ratio:.6g}", ">= 10 recommended",
+            "Only the retarded 1/R acceleration field is included; the 1/R^2 velocity field is omitted.",
+        )
+    else:
+        add("Radiation-zone use", "WARNING", "geometry unavailable", ">= 10 recommended",
+            "The radiation-term approximation cannot be distance-checked.")
+
+    lost = bool(result.get("lost_to_aperture", False))
+    add(
+        "Aperture transmission", "FAIL" if lost else "PASS",
+        "particle lost" if lost else "particle transmitted",
+        "no aperture-loss event", "A lost trajectory invalidates downstream radiation metrics.",
+    )
+
+    chi_max = float((result.get("quantum") or {}).get("chi_max", np.nan))
+    if np.isfinite(chi_max):
+        q_status = "WARNING" if (not QUANTUM_CORRECTION and chi_max >= 0.1) else "PASS"
+        add(
+            "Classical/quantum regime", q_status, f"chi_e,max={chi_max:.6g}",
+            "chi_e < 0.1 when quantum correction is disabled",
+            "The classical radiation model becomes questionable as chi_e approaches unity.",
+        )
+
+    metadata = dict(getattr(device, "metadata", {}) or {})
+    if metadata.get("backend") and "RADIA" in str(metadata.get("backend")):
+        calibrated = metadata.get("calibration_verified")
+        add(
+            "RADIA field calibration",
+            "PASS" if calibrated is True else "WARNING",
+            f"verified={calibrated}; relative error={metadata.get('calibration_relative_error', 'n/a')}",
+            "target-B0 convergence verified",
+            "Geometry/material/segmentation convergence still requires the real local RADIA runtime.",
+        )
+
+    status_rank = {"PASS": 0, "WARNING": 1, "FAIL": 2}
+    overall = max((row["status"] for row in rows), key=status_rank.get)
+    return {
+        "overall_status": overall,
+        "checks": rows,
+        "model_scope": (
+            "Prescribed magnetostatic field; relativistic single electron; optional energy-loss drag "
+            "radiation reaction; retarded 1/R acceleration field; no bunch/emittance/coherence, "
+            "beamline transport, detector response, or omitted 1/R^2 near field."
+        ),
     }
 
 def intensity(r_spl, v_spl, a_spl, t_emit_range, q_part, z_obs=100.0, grid_n=100, angle_max=0.01):
@@ -1398,7 +1571,7 @@ def run_sim(helical_und, v0, t_span, r_obs, n_base=5000, gamma0_input=None, inje
     Ps_init = theoretical_power_device(gamma0, helical_und, vz=vz, m_part=me)
     Ps_avg = theoretical_power_device(g_avg, helical_und, vz=vz_avg, m_part=me)
 
-    return {
+    result = {
         "gamma0": gamma0, "gamma_avg": g_avg, "K": K,
         "K_power_eff_rms": K_power_eff,
         "v_perp": vperp, "v_z": vz, "v_z_avg": vz_avg, "k_u": ku,
@@ -1440,6 +1613,8 @@ def run_sim(helical_und, v0, t_span, r_obs, n_base=5000, gamma0_input=None, inje
         "r_obs": np.asarray(r_obs,dtype=float).copy(),
         "n_source_samples": int(len(ts)),
     }
+    result["physics_compliance"] = physics_compliance_assessment(result, helical_und)
+    return result
 
 def run_sim_scalar(und, v0, t_span, r_obs, n_base=4000, gamma0_input=None, injection=None, rtol=1e-9, atol=1e-11):
     if gamma0_input is None:
@@ -2642,6 +2817,8 @@ def make_default_undulator(
     radia_csv_lambda_u=0.05,
     error_switches=None,
     radia_options=None,
+    analytic_h3=0.0,
+    analytic_h5=0.0,
 ):
     """Construct a V11 insertion device from analytic or RADIA fields."""
     fm = FIELD_MODEL if field_model is None else str(field_model)
@@ -2694,6 +2871,10 @@ def make_default_undulator(
         "bx_scale": pset["bx_scale"],
         "by_scale": pset["by_scale"],
         "device_name": pset["device_name"],
+        "h1": float(analytic_h3),
+        "n1": 3,
+        "h2": float(analytic_h5),
+        "n2": 5,
     })
 
     if realistic:
