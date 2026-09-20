@@ -19,7 +19,8 @@ st.set_page_config(
     layout="wide",
 )
 
-st.sidebar.markdown("## Unified workflow")
+st.sidebar.markdown("## Engineering workflow")
+st.sidebar.caption("Setup → Run → Results → Analysis → Verification / Export")
 bridge = st.session_state.get("magnet_scan_bridge")
 if isinstance(bridge, dict) and bridge.get("field_map_csv"):
     st.sidebar.success("Stage 1 field ready → Stage 2 unlocked")
@@ -29,13 +30,13 @@ else:
 pages = [
     st.Page(
         MAGNET_PAGE,
-        title="1 · Magnet design & field",
+        title="1 · Setup & field model",
         icon="🧲",
         default=True,
     ),
     st.Page(
         SCAN_PAGE,
-        title="2 · Trajectory & radiation scan",
+        title="2 · Run, results & verification",
         icon="📈",
     ),
 ]
