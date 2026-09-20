@@ -91,7 +91,7 @@ if not st.session_state.get("stage2_disk_archive_restored"):
     st.session_state["stage2_disk_archive_restored"] = True
 
 with st.sidebar:
-    st.header("1 · Magnetic field")
+    st.header("1 · Setup — Magnetic field")
     archived_models = [
         item for item in st.session_state.get("magnet_model_history", [])
         if isinstance(item, dict) and item.get("bridge") is not None
@@ -139,7 +139,7 @@ with st.sidebar:
         "V11 analytic field": "analytic",
     }[field_label]
 
-    st.header("2 · Device")
+    st.header("2 · Setup — Device")
     device_options = list(v11.list_device_presets())
     bridge_device_map = {
         "Planar": "planar", "Helical": "helical", "Elliptical": "elliptical",
@@ -232,7 +232,7 @@ with st.sidebar:
             radia_samples_per_period = st.select_slider("Map z samples / period",options=[12,18,24,32,48],value=24)
             radia_field_margin_periods = st.number_input("Fringe-field margin (periods)",min_value=0.0,value=1.0,step=0.5)
 
-    st.header("3 · Main run")
+    st.header("3 · Run — Main simulation")
     gamma0 = st.number_input(
         "Electron γ",
         min_value=1.01,
@@ -262,7 +262,7 @@ with st.sidebar:
         "Observer θy (mrad)", value=0.0, step=0.05, format="%.4f"
     )
 
-    st.header("4 · Scan design")
+    st.header("4 · Run — Scan design")
     def _clear_scan_results_when_axis_changes():
         for key in (
             "scan_df", "scan_name", "representative_gamma_results",
@@ -307,7 +307,7 @@ with st.sidebar:
         help="Every chart still uses the scan variable on x; this only changes how many dependent observables are displayed.",
     )
 
-    st.header("5 · Numerical")
+    st.header("5 · Setup — Numerical controls")
     points_per_period = st.select_slider(
         "Tracking resolution",
         options=[48, 64, 96, 128],
@@ -317,7 +317,7 @@ with st.sidebar:
 
 # ---------------- Error-isolation controls ----------------
 with st.sidebar:
-    st.header("6 · Error isolation")
+    st.header("6 · Verification — Error isolation")
     error_mode = st.radio(
         "Error mode",
         ["Selected errors", "All errors", "Ideal (no errors)"],
@@ -419,7 +419,7 @@ def selected_error_switches():
 
 # ---------------- Analysis selection ----------------
 with st.sidebar:
-    st.header("7 · Analysis selection")
+    st.header("7 · Analysis — Selection")
     st.caption("The comprehensive result report is always shown after a full run. These switches add legacy/heavier analyses.")
 
     show_core = st.checkbox("Core radiation summary", value=True)
@@ -787,7 +787,7 @@ def result_json_bytes(result):
 
 top1, top2 = st.columns([1, 1])
 with top1:
-    st.subheader("Current configuration")
+    st.subheader("Setup summary — Current configuration")
     config_text = (
         'FIELD_MODEL   = "' + field_model + '"\n'
         'DEVICE_PRESET = "' + device_preset + '"\n'
@@ -802,7 +802,7 @@ with top1:
     st.code(config_text, language="python")
 
 with top2:
-    st.subheader("RADIA connection")
+    st.subheader("Input status — RADIA connection")
     if field_model.startswith("radia"):
         try:
             rad = v11.load_radia_module()
@@ -820,7 +820,7 @@ with top2:
         st.info("Analytic V11 field selected; RADIA is not required for this run.")
 
 st.divider()
-st.subheader("Magnetic field preview")
+st.subheader("Input preview — Magnetic field")
 st.caption(
     "This optional preview is for one magnetic device, so its internal coordinate is z. "
     "It is not a parameter-scan result."
@@ -893,7 +893,7 @@ st.caption(
 )
 results_status = st.empty()
 
-st.subheader("Optional single operating-point analysis")
+st.subheader("9 · Analysis — Single operating point")
 st.caption(
     "This is not a scan. It follows one electron through one device, so trajectory and field charts here legitimately use z. "
     "For speed/K/γ trends, use the primary parameter scan below."
@@ -1602,7 +1602,7 @@ if "scan_df" in st.session_state and len(st.session_state.scan_df):
 
 if field_model == "radia_generated":
     st.divider()
-    st.subheader("Error-strength response scan")
+    st.subheader("11 · Verification — Error-strength response")
     st.caption(
         "This is a second, controlled scan. The x-axis is the physical strength of one selected manufacturing error "
         "(or a multiplier of all currently selected errors), and every plotted y-value is a response observable from the latest V11/RADIA calculation."
