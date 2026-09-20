@@ -31,12 +31,13 @@ from magnet_studio.presets import (
 from integration.bridge import load_transfer_package, discover_saved_transfer_records
 from reporting.live_progress import LiveProgressTable, render_saved_progress
 
-st.title("Stage 1 — RADIA Magnet Design, Field Generation & Inspection")
+st.title("Stage 1 — Setup, Magnet Model & Field Results")
 st.caption(
     "Build and inspect RADIA magnetic devices; solve and sample on-axis, 2D, and 3D fields; "
     "analyze trajectories, field integrals, harmonics, phase error, and polarization-related metrics; "
     "then export the same results for downstream trajectory and radiation tools."
 )
+st.caption("Workspace order: Setup → Run → Results → Analysis → Verification / Export.")
 
 
 def _model_history():
@@ -182,8 +183,8 @@ def render_completed_entity_gallery(payload):
     cards[2].metric("Magnetic regime", str(payload.get("classification", "unclassified")))
 
     tabs = st.tabs([
-        "3D magnet entity", "On-axis field", "2D field slice",
-        "3D vector field", "Electron trajectory", "Electron phase",
+        "Restored model — 3D magnet entity", "Restored results — On-axis field", "Restored results — 2D field slice",
+        "Restored results — 3D vector field", "Restored analysis — Electron trajectory", "Restored analysis — Electron phase",
     ])
     with tabs[0]:
         if blocks:
@@ -248,7 +249,7 @@ def render_completed_entity_gallery(payload):
         st.metric("Trajectory-derived electron phase error RMS", "n/a" if not math.isfinite(eph) else f"{eph:.5g}°")
 
 with st.sidebar:
-    st.header("Presets")
+    st.header("1 · Setup — Presets")
     builtin_name = st.selectbox("Built-in preset", list(BUILTIN_PRESETS), key="preset_builtin_name")
     if st.button("Load built-in preset", width="stretch"):
         runtime = parse_preset(BUILTIN_PRESETS[builtin_name])
@@ -768,8 +769,8 @@ if run:
             st.info(f"Computed magnetic regime: {classification}.")
 
         tabs = st.tabs([
-            "On-axis field", "2D map", "3D field map", "3D magnet geometry",
-            "Trajectory", "Electron phase", "Ideal comparison", "Metrics & export"
+            "2 · Results — On-axis field", "3 · Results — 2D field map", "4 · Results — 3D field map", "5 · Model — Magnet geometry",
+            "6 · Analysis — Trajectory", "7 · Analysis — Electron phase", "8 · Verification — Ideal comparison", "9 · Export — Metrics & files"
         ])
 
         with tabs[0]:
